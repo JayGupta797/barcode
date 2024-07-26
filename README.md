@@ -12,52 +12,15 @@ Conceptually, my approach uses two key ingredients: a Reader and Process functio
 
 ## Options
 
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="30%">Option</th>
-      <th width="50%">Description</th>
-      <th width="20%">Default</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td width="30%"><code>-f, --file &lt;file&gt;</code></td>
-      <td width="50%">Movie file (required)</td>
-      <td width="20%">-</td>
-    </tr>
-    <tr>
-      <td width="30%"><code>-r, --rate &lt;rate&gt;</code></td>
-      <td width="50%">Sampling rate</td>
-      <td width="20%">1</td>
-    </tr>
-    <tr>
-      <td width="30%"><code>-b, --batches &lt;batches&gt;</code></td>
-      <td width="50%">Number of batches</td>
-      <td width="20%">100</td>
-    </tr>
-    <tr>
-      <td width="30%"><code>-w, --workers &lt;workers&gt;</code></td>
-      <td width="50%">Number of workers</td>
-      <td width="20%">5</td>
-    </tr>
-    <tr>
-      <td width="30%"><code>-v, --verbose</code></td>
-      <td width="50%">Verbose output</td>
-      <td width="20%">false</td>
-    </tr>
-    <tr>
-      <td width="30%"><code>-t, --transform</code></td>
-      <td width="50%">Transform output</td>
-      <td width="20%">false</td>
-    </tr>
-    <tr>
-      <td width="30%"><code>-h, --help</code></td>
-      <td width="50%">Display this help message</td>
-      <td width="20%">-</td>
-    </tr>
-  </tbody>
-</table>
+| Option                     | Description                       | Default |
+|:---------------------------|:----------------------------------|:--------|
+| `-f, --file <file>`        | Movie file (required)             | -       |
+| `-r, --rate <rate>`        | Sampling rate                     | 1       |
+| `-b, --batches <batches>`  | Number of batches                 | 100     |
+| `-w, --workers <workers>`  | Number of workers                 | 5       |
+| `-v, --verbose`            | Verbose output                    | false   |
+| `-t, --transform`          | Transform output                  | false   |
+| `-h, --help`               | Display this help message         | -       |
 
 To generate a barcode with the default settings:
 
