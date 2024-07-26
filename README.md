@@ -7,7 +7,8 @@ It is worth noting that this program computes the row-wise average over a batch 
 
 # Approach
 Conceptually, my approach uses two key ingredients: a Reader and Process function in alignment with the Producer/Consumer design pattern. The reader is responsible for reading in frames and the workers process a batch of frames into a strip.
-![fzNhsbe6](https://github.com/user-attachments/assets/038f8d2e-0ee6-4924-b95d-8c7042ebc828)
+
+![fzNhsbe6](https://github.com/user-attachments/assets/7b1e2baf-6373-4d01-8fda-581ce40aac20)
 
 ## Options
 
@@ -20,8 +21,6 @@ Conceptually, my approach uses two key ingredients: a Reader and Process functio
 | `-v, --verbose`              | Verbose output                               | false             |
 | `-t, --transform`            | Transform output                             | false             |
 | `-h, --help`                 | Display help message                         | -                 |
-
-## Example
 
 To generate a barcode with the default settings:
 
@@ -45,5 +44,6 @@ Feel free to customize further based on your project's requirements and addition
 
 # Example
 Here is an example using a [compilation](https://youtu.be/rzNek4MfK5M?si=HRC4kT1_8PAQ-3Jv) of cutscenes from Zelda Breath of the Wild. In post, a filter was applied to brighten colors and [squoosh](https://squoosh.app/) was used to compress the image to a reasonable size.
+
 ![vTBflB3o](https://github.com/user-attachments/assets/2ed1a3d0-a1f4-4547-917b-cd8915a1a834)
 
