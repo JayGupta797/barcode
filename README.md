@@ -10,8 +10,6 @@ Conceptually, my approach uses two key ingredients: a Reader and Process functio
 
 ## Options
 
-## Options
-
 | Option                     | Description                       | Default |
 |:---------------------------|:----------------------------------|:--------|
 | `-f, --file <file>`        | Movie file (required)             | -       |
