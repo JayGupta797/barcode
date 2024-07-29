@@ -1,26 +1,27 @@
-/*
- * main.cpp
- * --------
- * This program takes as input a video file (e.g., example.mp4) and yields a movie barcode
- * with the desired specifications. The terminal command uses the following template:
- * ./barcode -f movie.mp4 -r 1 -b 1000 -w 5 -v -t
-*/
-
 #include <opencv2/opencv.hpp>
 #include <boost/asio/thread_pool.hpp>
 #include <boost/asio/post.hpp>
 #include <vector>
 #include <getopt.h>
 #include <spdlog/spdlog.h>
+#include <filesystem>
 
-#define SUCCESS true;
-#define FAILURE false;
+namespace {
+    constexpr int DEFAULT_RATE = 1;
+    constexpr int DEFAULT_BATCHES = 100;
+    constexpr int DEFAULT_WORKERS = 5;
+    constexpr bool DEFAULT_VERBOSE = false;
+    constexpr bool DEFAULT_TRANSFORM = false;
+    constexpr char DEFAULT_OUTPUT_FILE[] = "../barcode.png";
+}
+
+enum ReturnCode { SUCCESS = 0, FAILURE = 1 };
 
 /*
  * Batch Struct
  * ------------
  * The Batch structure maintains a vector of frames and a unique identifier.
- * This abstractions helps process frames in easy-to-manage groups.
+ * This abstraction helps process frames in easy-to-manage groups.
 */
 struct Batch {
     int id;
@@ -35,11 +36,12 @@ struct Batch {
 */
 struct CommandLineArguments {
     std::string file;
-    int rate = 1;
-    int batches = 100;
-    int workers = 5;
-    bool verbose = false;
-    bool transform = false;
+    int rate = DEFAULT_RATE;
+    int batches = DEFAULT_BATCHES;
+    int workers = DEFAULT_WORKERS;
+    bool verbose = DEFAULT_VERBOSE;
+    bool transform = DEFAULT_TRANSFORM;
+    std::string output = DEFAULT_OUTPUT_FILE;
 };
 
 /*
@@ -67,36 +69,44 @@ void printUsage(const char* programName) {
 */
 bool parseArguments(int argc, char* argv[], CommandLineArguments& arguments) {
     int opt;
-    while ((opt = getopt(argc, argv, "f:r:b:w:vth")) != -1) {
-        switch (opt) {
-        case 'f':
-            arguments.file = optarg;
-            break;
-        case 'r':
-            arguments.rate = std::stoi(optarg);
-            break;
-        case 'b':
-            arguments.batches = std::stoi(optarg);
-            break;
-        case 'w':
-            arguments.workers = std::stoi(optarg);
-            break;
-        case 'v':
-            arguments.verbose = true;
-            break;
-        case 't':
-            arguments.transform = true;
-            break;
-        case 'h':
-        default:
-            printUsage(argv[0]);
+    while ((opt = getopt(argc, argv, "f:r:b:w:o:vth")) != -1) {
+        try {
+            switch (opt) {
+                case 'f':
+                    arguments.file = optarg;
+                    break;
+                case 'r':
+                    arguments.rate = std::stoi(optarg);
+                    break;
+                case 'b':
+                    arguments.batches = std::stoi(optarg);
+                    break;
+                case 'w':
+                    arguments.workers = std::stoi(optarg);
+                    break;
+                case 'o':
+                    arguments.output = optarg;
+                    break;
+                case 'v':
+                    arguments.verbose = true;
+                    break;
+                case 't':
+                    arguments.transform = true;
+                    break;
+                case 'h':
+                default:
+                    printUsage(argv[0]);
+                    return FAILURE;
+            }
+        } catch (const std::invalid_argument& e) {
+            spdlog::error("Invalid argument for option: -{}", static_cast<char>(opt));
             return FAILURE;
         }
     }
 
     // Check that a video file is supplied
     if (arguments.file.empty()) {
-        spdlog::error("a movie file is required");
+        spdlog::error("A movie file is required.");
         printUsage(argv[0]);
         return FAILURE;
     }
@@ -104,22 +114,23 @@ bool parseArguments(int argc, char* argv[], CommandLineArguments& arguments) {
     return SUCCESS;
 }
 
+
 /*
  * checkArguments()
  * ----------------
- * This helper functions returns TRUE is the arguments supplied appear valid and false otherwise.
+ * This helper function returns TRUE if the arguments supplied appear valid and false otherwise.
  * Errors are logged for convenience.
 */
 bool checkArguments(CommandLineArguments arguments) {
-    // Check that the movie file is readable
+    // Check that the movie file is readable and, if so, extract the frame count
     cv::VideoCapture cap(arguments.file);
     if (!cap.isOpened()) {
         spdlog::error("Unable to open the movie file: {}", arguments.file);
         return FAILURE;
     }
-
-    // Check that the arguments are non-negative and do not exceed extreme bounds
     int totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
+
+    // Check that the arguments are positive and do not exceed extreme bounds
     if (arguments.rate <= 0) {
         spdlog::error("Sampling rate must be greater than 0.");
         return FAILURE;
@@ -142,6 +153,13 @@ bool checkArguments(CommandLineArguments arguments) {
         return FAILURE;
     }
 
+    // Validate the output path
+    std::filesystem::path path = arguments.output;
+    if (!std::filesystem::exists(path.parent_path())) {
+        spdlog::error("Invalid output path: {}", arguments.output);
+        return FAILURE;
+    }
+
     // Otherwise, release the capture and indicate success
     cap.release();
     return SUCCESS;
@@ -153,14 +171,14 @@ bool checkArguments(CommandLineArguments arguments) {
  * This function processes a batch of frames by computing its row-wise average.
  * The result is neatly placed in a results vector based on the batch's id.
 */
-void process(Batch batch, std::vector<cv::Mat> &results) {
+void process(Batch& batch, std::vector<cv::Mat>& results) {
     cv::Mat concatenation;
     cv::Mat average;
     cv::hconcat(batch.frames, concatenation);
     cv::reduce(concatenation, average, 1, cv::REDUCE_AVG);
 
     // Store the result
-    // thread-safe because we never modify the same memory
+    // thread-safe because the unique batch id ensures we never modify the same memory
     results[batch.id] = average;
     spdlog::info("Processed batch {}.", batch.id);
 }
@@ -171,10 +189,13 @@ void process(Batch batch, std::vector<cv::Mat> &results) {
  * This function reads frames from the capture and batches them based on the 
  * sampling rate specified. Once packaged, batches are allocated to worker threads.
 */
-void read(boost::asio::thread_pool &pool, std::vector<cv::Mat> &results, CommandLineArguments arguments) {
+void read(boost::asio::thread_pool& pool, std::vector<cv::Mat>& results, const CommandLineArguments& arguments) {
     // Open the video file
     cv::VideoCapture cap(arguments.file);
-    cap.open(arguments.file);
+    if (!cap.isOpened()) {
+        spdlog::error("Unable to open the movie file: {}", arguments.file);
+        return;
+    }
 
     // Compute frames per batch
     int totalFrames = cap.get(cv::CAP_PROP_FRAME_COUNT);
@@ -184,8 +205,7 @@ void read(boost::asio::thread_pool &pool, std::vector<cv::Mat> &results, Command
     // Setup Counters and Current Batch
     int frameCounter = 0;
     int batchCounter = 0;
-    Batch currentBatch;
-    currentBatch.id = batchCounter;
+    Batch currentBatch{batchCounter};
 
     // While batches are remaining...
     while (batchCounter < arguments.batches) {
@@ -200,7 +220,7 @@ void read(boost::asio::thread_pool &pool, std::vector<cv::Mat> &results, Command
 
             // Allocate the current batch if its size threshold is met
             if (currentBatch.frames.size() == framesPerBatch) {
-                boost::asio::post(pool, [currentBatch, &results]() {process(currentBatch, results);});
+                boost::asio::post(pool, [currentBatch, &results]() { process(currentBatch, results); });
                 spdlog::info("Allocated batch {}.", currentBatch.id);
                 batchCounter++;
                 currentBatch = Batch{batchCounter};
@@ -217,7 +237,7 @@ void read(boost::asio::thread_pool &pool, std::vector<cv::Mat> &results, Command
  * This helper function remaps the barcode (passed by reference) from cartesian to 
  * polar space in-place.
 */
-void polarTransform(cv::Mat &barcode, int nBatches) {
+void polarTransform(cv::Mat& barcode, int nBatches) {
     // Prepare for transformation
     cv::Mat flipped;
     cv::Mat polarImage;
@@ -242,11 +262,11 @@ void polarTransform(cv::Mat &barcode, int nBatches) {
 int main(int argc, char** argv) {
     // Parse and Check arguments
     CommandLineArguments arguments;
-    if (!parseArguments(argc, argv, arguments)) {
-        return 1;
+    if (parseArguments(argc, argv, arguments) == FAILURE) {
+        return FAILURE;
     }
-    if (!checkArguments(arguments)) {
-        return 1;
+    if (checkArguments(arguments) == FAILURE) {
+        return FAILURE;
     }
     if (!arguments.verbose) {
         spdlog::set_level(spdlog::level::off);
@@ -258,18 +278,18 @@ int main(int argc, char** argv) {
     read(pool, results, arguments);
     pool.join();
 
-     // Package the vector into a single matrix
+    // Package the vector into a single matrix
     cv::Mat barcode;
     cv::hconcat(results, barcode);
 
-     // Apply polar transform is requested
+    // Apply polar transform if requested
     if (arguments.transform) {
         polarTransform(barcode, arguments.batches);
     }
 
     // Save the barcode image
-    cv::imwrite("../barcode.png", barcode);
-    spdlog::info("Barcode saved as barcode.png");
+    cv::imwrite(arguments.output, barcode);
+    spdlog::info("Barcode saved as {}", arguments.output);
 
-    return 0;
+    return SUCCESS;
 }
