@@ -121,7 +121,7 @@ bool parseArguments(int argc, char* argv[], CommandLineArguments& arguments) {
  * This helper function returns TRUE if the arguments supplied appear valid and false otherwise.
  * Errors are logged for convenience.
 */
-bool checkArguments(CommandLineArguments arguments) {
+bool checkArguments(const CommandLineArguments& arguments) {
     // Check that the movie file is readable and, if so, extract the frame count
     cv::VideoCapture cap(arguments.file);
     if (!cap.isOpened()) {
@@ -171,7 +171,7 @@ bool checkArguments(CommandLineArguments arguments) {
  * This function processes a batch of frames by computing its row-wise average.
  * The result is neatly placed in a results vector based on the batch's id.
 */
-void process(Batch& batch, std::vector<cv::Mat>& results) {
+void process(const Batch& batch, std::vector<cv::Mat>& results) {
     cv::Mat concatenation;
     cv::Mat average;
     cv::hconcat(batch.frames, concatenation);
